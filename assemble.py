@@ -1,22 +1,3 @@
-'''
-Adds the 'assemble' command to pwndbg
-Allows you to run `assemble 0xdeadbeef "xor eax, eax; ret"`
-
-Or enter multiple lines of assembly and terminate with 'end'
-```
-assemble 0xdeadbeef
-xor eax, eax
-sub eax, 0xfffffffe
-ret
-end
-```
-
-Depends on keystone-engine, which pip installs all dumb so you have to run
-these commands to get it to work (sudo):
-python3 -m pip install keystone-engine
-mv /usr/local/lib/python3.7/dist-packages/usr/lib/python3/dist-packages/keystone/libkeystone.so \
-   /usr/local/lib/python3.7/dist-packages/keystone/
-'''
 import pwndbg
 import argparse
 from keystone import *
