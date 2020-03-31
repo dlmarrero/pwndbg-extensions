@@ -1,5 +1,5 @@
-# ownbdg-extensions
-Cool extensions for pwndbg
+# pwnbdg-extensions
+Useful extensions for pwndbg
 
 ## Installation
 Modify ~/.gdbinit and source each script you want to use, for example:
