@@ -1,9 +1,14 @@
 import pwndbg
 import gdb
 import argparse
+import sys
 import os
+
+# Must be set before importing pwntools
 os.environ['PWNLIB_NOTERM'] = 'true'
-from pwn import asm,context
+
+from pwn import asm,context,PwnlibException
+
 
 # TODO: include a jmp patching option... maybe too much
 parser = argparse.ArgumentParser(description="Starting at the specified address, write the assembled instructions")
@@ -12,21 +17,31 @@ parser.add_argument("code", type=str, default='', nargs='?', help="The code to b
 @pwndbg.commands.ArgparsedCommand(parser)
 @pwndbg.commands.OnlyWhenRunning
 def assemble(address, code):
-    # Get the current architecture from pwndbg
-    # Currently only supports i386 and x86_64
     try:
+        # Get the current architecture from pwndbg
         context.update(arch=pwndbg.arch.current, os='linux')
     except:
-        raise NotImplementedError("Unimplemented architecture: {pwndbg.arch.current}")
+        raise ValueError("Unsupported architecture: {pwndbg.arch.current}")
 
-    # Use 0 as an address arg to create a new space
+    # Check if the address is mapped
     if not pwndbg.memory.poke(address):
-        if address == long(str(gdb.parse_and_eval('mmap(0x%x, 0x400, 7, 0x32, -1, 0)' % address)), 16):
-            print("mmap'd at address 0x%x" % address)
-        else:
-            raise MemoryError("Cannot mmap at the address 0x%x" % address)
+        try:
+            # mmap a new page at the specified address 
+            mapped_addr = long(str(gdb.parse_and_eval('mmap(0x%x, 0x1000, 7, 0x32, -1, 0)' % address)), 16)
+        except pwndbg.gdb.error:
+            # Handle binaries where symbol for mmap is not loaded
+            raise Exception(f"Address {hex(address)} is not mapped and mmap symbol not in current context")
 
-    # Allow entering assembly a line at a time until "end"
+        # mmap returns -1 on failure, we check for 32b and 64b -1
+        if mapped_addr == 0xffffffffffffffff or mapped_addr == 0xffffffff:
+            raise Exception("Call to mmap with address 0x%x failed" % address)
+    
+        print("Mapped new memory region at 0x%x" % mapped_addr)
+
+        # Update address where we'll write instructions
+        address = mapped_addr
+
+    # Prompt for instructions when code arg is not supplied
     if not code:
         print("Enter assembly instructions one per line")
         print("Enter 'EOF' when done")
@@ -36,10 +51,12 @@ def assemble(address, code):
                 break
             code += ins + '\n'
     
-    # Assemble the instructions
-    # the asm function returns a tuple with the 
-    # bytes being a list of ints at index 0
-    asm_str = bytes(asm(code))
+    try:
+        # Assemble the instructions
+        asm_str = asm(code)
+    except PwnlibException as e:
+        # Handle bad instructions
+        raise Exception("Failed to assemble. Check your instructions.")
     
     # Write the assembled code to the specified address
     pwndbg.memory.write(address, asm_str)
